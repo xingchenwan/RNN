@@ -57,8 +57,9 @@ def synthetic_series(series_length, input_size, num_steps):
     x = [np.array(x[i * input_size: (i+1) * input_size]) for i in range(len(x) // input_size)]
 
     x = np.array([x[i: i+num_steps] for i in range(len(x) - num_steps)])
-    y = np.array([x[i+num_steps] for i in range(len(x) - num_steps)])
+    y = np.zeros((x.shape[0], x.shape[-1]))
 
+    y[num_steps:, :] = np.array([x[i+num_steps][0] for i in range(len(x) - num_steps)])
     return x, y
 
 

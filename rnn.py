@@ -252,30 +252,25 @@ class RNN:
         if tolerance == 0:
             return (100.0 * np.sum(label == predict)) / predict.shape[0]
         else:
-            correct_idx = np.abs(label - predict < tolerance)
-            return 100.0 * np.sum(correct_idx) / predict.shape[0]
+            correct_idx = (np.abs(label - predict) < tolerance)
+            return np.sum(correct_idx)
 
     # Plotter Function
     def gen_summary(self):
         if len(self.train_losses) == 0:
             raise ValueError("The model session has not been run!")
 
-        plt.subplot(211)
+        plt.subplot(121)
         plt.plot(self.train_losses)
         plt.ylabel("Loss")
         plt.xlabel('Number of batch iterations')
         plt.title("Loss vs iterations")
 
-        #plt.subplot(212)
-        #plt.plot(self.train_accuracies)
-        #plt.ylabel("Accuracy")
-        #plt.xlabel("Number of iterations")
-        #plt.title("Accuracy vs iterations")
-
-        #comp = np.array([self.predict, self.test_label])
-        #print("Test label vs Prediction: ")
-        #print(comp)
-        #print("Test data accuracy", str(self.get_accuracy(self.test_label, self.predict)))
+        plt.subplot(122)
+        plt.plot(self.predict, label='Predictions')
+        plt.plot(self.test_label, label='Test Labels')
+        plt.title("Test label vs Prediction")
+        plt.legend()
 
 
 

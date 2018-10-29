@@ -8,13 +8,13 @@ if __name__ == '__main__':
     num_segment = 50
 
     input_size = 1
-    num_steps = 3
+    num_steps = 20
 
 
     # Segment the train and test data
-    # x, y = synthetic_series(train_length, input_size, num_steps)
+    x, y = synthetic_series(train_length, input_size, num_steps)
 
-    x, y = hochreiter_schmidhuber(3, 50000)
+    # x, y = hochreiter_schmidhuber(num_steps, 50000)
 
     train_x = x[:int(train_length*train_data_proportion), :]
     train_y = y[:int(train_length*train_data_proportion), :]
@@ -22,10 +22,10 @@ if __name__ == '__main__':
     test_y = y[int(train_length*train_data_proportion):, :]
     # Initialise a RNN model
 
-    params = {'batch_size': 32,
+    params = {'batch_size': 64,
               'input_dimension': input_size,
               'num_steps': num_steps,
-              'num_cells': 128,
+              'num_cells': 100,
               'learning_rate': 0.001,
               'num_layers': 1,
               'model_type': 'rnn'
