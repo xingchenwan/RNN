@@ -3,8 +3,8 @@ from rnn import *
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    train_length = 1000
-    train_data_proportion = 0.75
+    train_length = 10000
+    train_data_proportion = 0.99
     num_segment = 50
 
     input_size = 1
