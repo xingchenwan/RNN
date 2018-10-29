@@ -1,6 +1,5 @@
 # Xingchen Wan 2018 | xingchen.wan@st-annes.ox.ac.uk
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 # Three pathological series suggested by Hochreiter and Schmidhuber (1997) that are usually difficult for RNN trainings

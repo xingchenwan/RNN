@@ -44,6 +44,7 @@ class RNN:
         self.predict = None
         self.tf_labels = None
         self.tf_dataset = None
+        self.final_predict = None
         self.losses = []
 
     def create_graph(self):
@@ -62,13 +63,13 @@ class RNN:
 
             # Forward pass
             if model_type == 'rnn':
-                predictions = self.rnn_model(self.tf_dataset)
+                self.predict = self.rnn_model(self.tf_dataset)
             elif model_type == 'lstm':
-                predictions = self.lstm_model(self.tf_dataset)
+                self.predict = self.lstm_model(self.tf_dataset)
             else:
                 raise NotImplementedError("Unimplemented RNN model keyword")
 
-            self.loss = tf.reduce_mean(tf.square(predictions - self.tf_labels))
+            self.loss = tf.reduce_mean(tf.square(self.predict - self.tf_labels))
 
             if self.options['regularisation_coeff'] > 0.:
                 # Add in L2 penalty for regularisation if required
@@ -89,7 +90,6 @@ class RNN:
                     raise NotImplementedError("Unimplemented built-in optimiser keyword.")
             else:
                 self.optimizer = self.options['customized_optimizer']
-
             self.minimise = self.optimizer.minimize(self.loss)
 
     def run(self):
@@ -104,21 +104,32 @@ class RNN:
 
             # Stochastic gradient descent: train the data with a mini-batch each iteration
             batch_size = self.options['batch_size']
-            batch_count = self.training_data.shape[0] // batch_size
-            for batch in range(batch_count):
-                try:
-                    batch_data = self.training_data[batch*batch_size:(batch+1)*batch_size, :, :]
-                    batch_labels = self.training_label[batch*batch_size:(batch+1)*batch_size, :]
-                except KeyError:
-                    batch_data = self.training_data[batch*batch_size:, :, :]
-                    batch_labels = self.training_label[batch*batch_size:, :]
+            for epoch_idx in range(self.options['num_epoch']):
+                training_epoch = self.training_data[epoch_idx]
+                label_epoch = self.training_label[epoch_idx]
+                batch_count = training_epoch.shape[0] // batch_size
 
-                feed_dict = {
-                    self.tf_dataset: batch_data,
-                    self.tf_labels: batch_labels}
+                for batch in range(batch_count):
+                    try:
+                        batch_data = training_epoch[batch*batch_size:(batch+1)*batch_size, :, :]
+                        batch_labels = label_epoch[batch*batch_size:(batch+1)*batch_size, :]
+                    except KeyError:
+                        batch_data = training_epoch[batch*batch_size:, :, :]
+                        batch_labels = label_epoch[batch*batch_size:, :]
+                    feed_dict = {
+                        self.tf_dataset: batch_data,
+                        self.tf_labels: batch_labels}
 
-                l, _, = session.run([self.loss, self.minimise], feed_dict=feed_dict)
-                self.losses.append(l)
+                    l, _, = session.run([self.loss, self.minimise], feed_dict=feed_dict)
+                    self.losses.append(l)
+
+            # Finally run the data on test data
+            final_feed_dict = {
+                self.tf_dataset: self.test_data,
+                self.tf_labels: self.test_label
+            }
+            self.predict, final_loss = session.run([self.predict, self.minimise], feed_dict=final_feed_dict)
+            return self.predict
 
     # Implementation of RNN and LSTM models
     def rnn_model(self, training_data):
@@ -175,19 +186,22 @@ class RNN:
                        num_layers=1,
                        regularisation_coeff=0,
                        input_dimension=None,
-                       num_steps=30):
+                       num_steps=30,
+                       num_epoch=1):
         """
         :param num_cells: Number of hidden units per layer in the RNN/LSTM network
         :param learning_rate: initial learning rate
         :param batch_size: batch size
         :param optimizer: choice of the chosen optimiser ('rms', 'adam', etc)
         :param model_type: 'rnn' or 'lstm'
-        :param use_customized_optimizer: bool - if True the optimizer object in customized_optimizer will be used instead
+        :param use_customized_optimizer: bool - if True the optimizer object in customized_optimizer
+        will be used instead.
         :param customized_optimizer: optimizer object - if use_customized_optimizer is True, this optimizer will be used
         :param num_layers: number of layers in the RNN/LSTM
         :param regularisation_coeff: regularisation coefficient (a.k.a lambda)
         :param input_dimension: input dimension of the each data point. For scalar time series this value is 1
         :param num_steps: number of data points of each input sequence
+        :param num_epoch: number of training epochs
         :return:
         """
 
@@ -202,15 +216,27 @@ class RNN:
             'customized_optimizer': customized_optimizer,
             'regularisation_coeff': regularisation_coeff,
             "input_dimension": input_dimension,
-            'num_steps': num_steps
+            'num_steps': num_steps,
+            'num_epoch': num_epoch
         }
         return options
 
-    # Plotter Functions
-    def plot_loss(self):
+    # Plotter Function
+    def plot_results(self):
         if len(self.losses) == 0:
             raise ValueError("The model session has not been run!")
+
+        plt.subplot(211)
         plt.plot(self.losses)
         plt.ylabel("Loss")
-        plt.xlabel("Number of batch iterations")
+        plt.xlabel('Number of batch iterations')
+        plt.title("Loss vs iterations")
+
+        plt.subplot(212)
+        plt.plot(self.test_label)
+        if self.predict is not None:
+            plt.plot(self.predict)
+        plt.legend()
+
+
 
