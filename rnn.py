@@ -44,8 +44,11 @@ class RNN:
         self.predict = None
         self.tf_labels = None
         self.tf_dataset = None
-        self.final_predict = None
-        self.losses = []
+        self.learning_rate = None
+
+        # Two lists to store the losses and accuracies during training and testing
+        self.train_losses = []
+        self.train_accuracies = []
 
     def create_graph(self):
         """
@@ -60,6 +63,7 @@ class RNN:
             self.tf_dataset = tf.placeholder(tf.float32,
                                              shape=(None, self.options['num_steps'], self.input_dimensions))
             self.tf_labels = tf.placeholder(tf.float32, shape=(None, self.input_dimensions))
+            self.learning_rate = tf.placeholder(tf.float32, None, name='learning_rate')
 
             # Forward pass
             if model_type == 'rnn':
@@ -79,13 +83,13 @@ class RNN:
 
             if self.options['use_customised_optimizer'] is False:
                 if optimiser_selected == 'adam':
-                    self.optimizer = tf.train.AdamOptimizer(self.options['learning_rate'])
+                    self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
                 elif optimiser_selected == 'grad':
-                    self.optimizer = tf.train.GradientDescentOptimizer(self.options['learning_rate'])
+                    self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
                 elif optimiser_selected == 'ada':
-                    self.optimizer = tf.train.AdagradOptimizer(self.options['learning_rate'])
+                    self.optimizer = tf.train.AdagradOptimizer(self.learning_rate)
                 elif optimiser_selected == 'rms':
-                    self.optimizer = tf.train.RMSPropOptimizer(self.options['learning_rate'])
+                    self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
                 else:
                     raise NotImplementedError("Unimplemented built-in optimiser keyword.")
             else:
@@ -109,6 +113,10 @@ class RNN:
                 label_epoch = self.training_label[epoch_idx]
                 batch_count = training_epoch.shape[0] // batch_size
 
+                learning_rate = self.options['learning_rate']
+                if self.options['learning_rate_decay_coeff'] > 0.:
+                    learning_rate *= self.options['learning_rate_decay_coeff'] ** \
+                                     max(float(epoch_idx + 1 - self.options['init_epoch']), 0.0)
                 for batch in range(batch_count):
                     try:
                         batch_data = training_epoch[batch*batch_size:(batch+1)*batch_size, :, :]
@@ -118,15 +126,18 @@ class RNN:
                         batch_labels = label_epoch[batch*batch_size:, :]
                     feed_dict = {
                         self.tf_dataset: batch_data,
-                        self.tf_labels: batch_labels}
+                        self.tf_labels: batch_labels,
+                        self.learning_rate: learning_rate}
 
-                    l, _, = session.run([self.loss, self.minimise], feed_dict=feed_dict)
-                    self.losses.append(l)
+                    p, l, _, = session.run([self.predict, self.loss, self.minimise], feed_dict=feed_dict)
+                    self.train_losses.append(l)
+                    self.train_accuracies.append(self.get_accuracy(batch_labels, p))
 
             # Finally run the data on test data
             final_feed_dict = {
                 self.tf_dataset: self.test_data,
-                self.tf_labels: self.test_label
+                self.tf_labels: self.test_label,
+                self.learning_rate: 0.,
             }
             self.predict, final_loss = session.run([self.predict, self.minimise], feed_dict=final_feed_dict)
             return self.predict
@@ -178,26 +189,31 @@ class RNN:
     @staticmethod
     def unpack_options(num_cells=24,
                        learning_rate=1e-3,
+                       learning_rate_decay_coeff=0.,
+                       init_epoch=5,
                        batch_size=100,
                        optimizer='rms',
                        model_type='rnn',
                        use_customized_optimizer=False,
                        customized_optimizer=None,
                        num_layers=1,
-                       regularisation_coeff=0,
+                       regularisation_coeff=0.,
                        input_dimension=None,
                        num_steps=30,
-                       num_epoch=1):
+                       num_epoch=1,):
         """
         :param num_cells: Number of hidden units per layer in the RNN/LSTM network
         :param learning_rate: initial learning rate
+        :param learning_rate_decay_coeff: the exponentially decaying coefficient of learning rate for each epoch.
+        :param init_epoch: initial number of epoches where the learning rate will be kept constant. Only relevant if
+        learning_rate_decay_coeff is a number other than zero.
         :param batch_size: batch size
         :param optimizer: choice of the chosen optimiser ('rms', 'adam', etc)
         :param model_type: 'rnn' or 'lstm'
         :param use_customized_optimizer: bool - if True the optimizer object in customized_optimizer
         will be used instead.
         :param customized_optimizer: optimizer object - if use_customized_optimizer is True, this optimizer will be used
-        :param num_layers: number of layers in the RNN/LSTM
+        :param num_layers: number of layers of hidden units in the RNN/LSTM
         :param regularisation_coeff: regularisation coefficient (a.k.a lambda)
         :param input_dimension: input dimension of the each data point. For scalar time series this value is 1
         :param num_steps: number of data points of each input sequence
@@ -208,6 +224,8 @@ class RNN:
         options = {
             'num_cells': num_cells,
             'learning_rate': learning_rate,
+            'learning_rate_decay_coeff': learning_rate_decay_coeff,
+            'init_epoch': init_epoch,
             'batch_size': batch_size,
             'optimizer': optimizer,
             'model_type': model_type,
@@ -221,22 +239,45 @@ class RNN:
         }
         return options
 
+    @staticmethod
+    def get_accuracy(label, predict, tolerance=1e-2):
+        """
+
+        :param label: label series
+        :param predict: predict series
+        :param tolerance: the maximum error between the element in the label and predict for the prediction to be
+        declared correct. For classification problems this value should be 0.
+        :return:
+        """
+        if tolerance == 0:
+            return (100.0 * np.sum(label == predict)) / predict.shape[0]
+        else:
+            correct_idx = np.abs(label - predict < tolerance)
+            return 100.0 * np.sum(correct_idx) / predict.shape[0]
+
     # Plotter Function
-    def plot_results(self):
-        if len(self.losses) == 0:
+    def gen_summary(self):
+        if len(self.train_losses) == 0:
             raise ValueError("The model session has not been run!")
 
         plt.subplot(211)
-        plt.plot(self.losses)
+        plt.plot(self.train_losses)
         plt.ylabel("Loss")
         plt.xlabel('Number of batch iterations')
         plt.title("Loss vs iterations")
 
-        plt.subplot(212)
-        plt.plot(self.test_label)
-        if self.predict is not None:
-            plt.plot(self.predict)
-        plt.legend()
+        #plt.subplot(212)
+        #plt.plot(self.train_accuracies)
+        #plt.ylabel("Accuracy")
+        #plt.xlabel("Number of iterations")
+        #plt.title("Accuracy vs iterations")
+
+        #comp = np.array([self.predict, self.test_label])
+        #print("Test label vs Prediction: ")
+        #print(comp)
+        #print("Test data accuracy", str(self.get_accuracy(self.test_label, self.predict)))
+
+
 
 
 

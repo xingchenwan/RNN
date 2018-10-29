@@ -8,7 +8,7 @@ import numpy as np
 
 def hochreiter_schmidhuber(segment_length, num_segment, mode='add'):
     x = np.array([np.random.rand(segment_length, ) for _ in range(num_segment)])
-    y = np.array([[np.array(0)] for _ in range(num_segment)])
+    y = np.array([[np.array(0.)] for _ in range(num_segment)])
     i = 0
     for segment in x:
         mark_idx = np.random.randint(0, len(segment), size=2)
