@@ -10,10 +10,11 @@ def hochreiter_schmidhuber(segment_length, num_segment, mode='add'):
     x = np.array([np.random.rand(segment_length, ) for _ in range(num_segment)])
     y = np.array([[np.array(0.)] for _ in range(num_segment)])
     i = 0
+    mark_idx = np.random.randint(0, segment_length, size=2)
+    while mark_idx[0] == mark_idx[1]:
+        mark_idx[1] = np.random.randint(0, segment_length, size=1)
+
     for segment in x:
-        mark_idx = np.random.randint(0, len(segment), size=2)
-        while mark_idx[0] == mark_idx[1]:
-            mark_idx[1] = np.random.randint(0, len(segment), size=1)
         if mode == 'add':
             y[i][0] = segment[mark_idx[0]] + segment[mark_idx[1]]
         elif mode == 'multiply':
@@ -29,10 +30,11 @@ def xor_series(segment_length, num_segment):
     x = np.array([np.array(np.random.choice(2, segment_length, p=[0.5, 0.5])) for _ in range(num_segment)])
     y = np.array([[np.array(0)] for _ in range(num_segment)])
     i = 0
+    mark_idx = np.random.randint(0, segment_length, size=2)
+    while mark_idx[0] == mark_idx[1]:
+        mark_idx[1] = np.random.randint(0, segment_length, size=1)
+
     for segment in x:
-        mark_idx = np.random.randint(0, len(segment), size=2)
-        while mark_idx[0] == mark_idx[1]:
-            mark_idx[1] = np.random.randint(0, len(segment), size=1)
         y[i][0] = segment[mark_idx[0]] ^ segment[mark_idx[1]]
         i += 1
     x = np.reshape(x, [x.shape[0], x.shape[1], 1])

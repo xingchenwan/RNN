@@ -8,18 +8,21 @@ if __name__ == '__main__':
     num_segment = 50
 
     input_size = 1
-    num_steps = 20
-
+    num_steps = 50
+    num_epoch = 10
 
     # Segment the train and test data
-    x, y = synthetic_series(train_length, input_size, num_steps)
+    train_x, train_y = [], []
+    for i in range(num_epoch):
+        x, y = synthetic_series(train_length, input_size, num_steps)
+        # x, y = hochreiter_schmidhuber(num_steps, 10000)
+        # x, y = xor_series(num_steps, 10000)
+        train_x.append(x)
+        train_y.append(y)
 
-    # x, y = hochreiter_schmidhuber(num_steps, 50000)
-
-    train_x = x[:int(train_length*train_data_proportion), :]
-    train_y = y[:int(train_length*train_data_proportion), :]
-    test_x = x[int(train_length*train_data_proportion):, :]
-    test_y = y[int(train_length*train_data_proportion):, :]
+    # test_x, test_y = hochreiter_schmidhuber(num_steps, 10000)
+    # test_x, test_y = xor_series(num_steps, 100)
+    test_x, test_y = synthetic_series(200, input_size, num_steps)
     # Initialise a RNN model
 
     params = {'batch_size': 64,
@@ -27,10 +30,12 @@ if __name__ == '__main__':
               'num_steps': num_steps,
               'num_cells': 100,
               'learning_rate': 0.001,
+              'learning_rate_decay_coeff': 0.99,
               'num_layers': 1,
+              'num_epoch': num_epoch,
               'model_type': 'rnn'
               }
-    rnn = RNN([train_x], [train_y], test_x, test_y, **params)
+    rnn = RNN(train_x, train_y, test_x, test_y, **params)
     rnn.create_graph()
     rnn.run()
     rnn.gen_summary()
